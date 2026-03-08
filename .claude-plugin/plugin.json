@@ -1,0 +1,17 @@
+{
+  "name": "env-doctor",
+  "version": "1.0.0",
+  "description": "Environment variable health checker for JS/TS, Python, Go projects",
+  "skills": [
+    {
+      "name": "env-doctor",
+      "path": "skills/env-doctor/SKILL.md",
+      "triggers": [
+        "env doctor",
+        "env check",
+        "检查环境变量",
+        "检查 .env"
+      ]
+    }
+  ]
+}

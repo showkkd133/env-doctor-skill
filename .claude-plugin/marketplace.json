@@ -1,0 +1,30 @@
+{
+  "name": "env-doctor",
+  "display_name": "env-doctor",
+  "description": "Environment variable health checker — scans code for env var references, compares .env files, detects hardcoded secrets, validates formats, and auto-generates .env.example templates.",
+  "author": "showkkd133",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": "https://github.com/showkkd133/env-doctor-skill",
+  "categories": [
+    "developer-tools",
+    "security",
+    "linting"
+  ],
+  "languages": [
+    "javascript",
+    "typescript",
+    "python",
+    "go"
+  ],
+  "tags": [
+    "claude-code",
+    "claude-skill",
+    "skill-md",
+    "developer-tools",
+    "environment-variables",
+    "dotenv",
+    "security"
+  ],
+  "min_claude_version": "1.0.0"
+}
