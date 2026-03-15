@@ -1,3 +1,13 @@
+---
+name: env-doctor
+description: 环境变量健康检查工具，扫描代码引用、检测硬编码密钥、验证格式
+triggers:
+  - "env doctor"
+  - "env check"
+  - "检查环境变量"
+  - "检查 .env"
+---
+
 # Skill: env-doctor
 
 ## 描述
@@ -91,6 +101,32 @@ grep -rn --include='*.go' \
 grep -rn --include='docker-compose*.yml' --include='docker-compose*.yaml' --include='Dockerfile*' \
   -oE '\$\{[A-Za-z_][A-Za-z0-9_]*\}' . 2>/dev/null | \
   grep -oE '[A-Za-z_][A-Za-z0-9_]*' | sort -u
+```
+
+#### 汇总扫描结果
+
+```bash
+# 汇总所有扫描结果到 CODE_VARS
+CODE_VARS=$(
+  # JS/TS: process.env.XXX
+  grep -rEoh 'process\.env\.[A-Za-z_][A-Za-z0-9_]*' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | sed 's/.*process\.env\.//' ;
+  # JS/TS: import.meta.env.XXX
+  grep -rEoh 'import\.meta\.env\.[A-Za-z_][A-Za-z0-9_]*' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | sed 's/.*import\.meta\.env\.//' ;
+  # JS/TS: 解构模式 const { X } = process.env
+  grep -rEh 'const[[:space:]]+\{[^}]+\}[[:space:]]*=[[:space:]]*process\.env' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | sed 's/.*{//' | sed 's/}.*//' | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -oE '[A-Za-z_][A-Za-z0-9_]*' ;
+  # JS/TS: 动态访问 process.env['KEY']
+  grep -rEoh "process\.env\[['\"][A-Za-z_][A-Za-z0-9_]*['\"]\]" --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | grep -oE '[A-Za-z_][A-Za-z0-9_]+' ;
+  # Python: os.environ/os.getenv/os.environ.get
+  grep -rEoh '(os\.environ\[["'"'"'][A-Za-z_][A-Za-z0-9_]*["'"'"']\]|os\.environ\.get\(["'"'"'][A-Za-z_][A-Za-z0-9_]*["'"'"']|os\.getenv\(["'"'"'][A-Za-z_][A-Za-z0-9_]*["'"'"'])' --include='*.py' --exclude-dir=venv --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | grep -oE '[A-Za-z_][A-Za-z0-9_]*' | grep -v '^os$' | grep -v '^environ$' | grep -v '^getenv$' | grep -v '^get$' ;
+  # Python: config("XXX")
+  grep -rEoh 'config\(["'"'"'][A-Za-z_][A-Za-z0-9_]*["'"'"']' --include='*.py' --exclude-dir=venv --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | grep -oE '["'"'"'][A-Za-z_][A-Za-z0-9_]*["'"'"']' | tr -d "\"'" ;
+  # Go: os.Getenv/os.LookupEnv
+  grep -rEoh '(os\.Getenv|os\.LookupEnv)\(["'"'"'][A-Za-z_][A-Za-z0-9_]*["'"'"']\)' --include='*.go' --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | grep -oE '["'"'"'][A-Za-z_][A-Za-z0-9_]*["'"'"']' | tr -d "\"'" ;
+  # Go: viper
+  grep -rEoh 'viper\.(GetString|GetInt|GetBool|GetFloat64|GetDuration|Get|BindEnv|SetDefault)\(["'"'"'][A-Za-z_][A-Za-z0-9_.]*["'"'"']' --include='*.go' --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | grep -oE '["'"'"'][A-Za-z_][A-Za-z0-9_.]*["'"'"']' | tr -d "\"'" ;
+  # Docker: ${VAR} in docker-compose/Dockerfile
+  grep -rEoh '\$\{[A-Za-z_][A-Za-z0-9_]*\}' --include='docker-compose*.yml' --include='docker-compose*.yaml' --include='Dockerfile*' --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build . 2>/dev/null | grep -oE '[A-Za-z_][A-Za-z0-9_]*'
+) | sort -u
 ```
 
 ### 阶段 2：对比 .env.example 与 .env
@@ -276,27 +312,27 @@ while IFS='=' read -r key value; do
 
   # URL 验证（精确匹配协议+主机名格式）
   if [[ "$key" =~ _(URL|URI)$ ]]; then
-    [[ ! "$value" =~ ^https?://[a-zA-Z0-9._-]+ ]] && echo "[FORMAT] $key: 期望 URL 格式，实际值: $value"
+    [[ ! "$value" =~ ^https?://[a-zA-Z0-9._-]+ ]] && echo "[FORMAT] $key: 期望 URL 格式，实际值: ${value:0:3}***"
   fi
 
   # 端口验证（先检查格式是否为纯数字，再检查范围）
   if [[ "$key" =~ _PORT$ ]]; then
     if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-      echo "[FORMAT] $key: 期望数字端口号，实际值: $value"
+      echo "[FORMAT] $key: 期望数字端口号，实际值: ${value:0:3}***"
     elif [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
-      echo "[FORMAT] $key: 期望 1-65535 端口号，实际值: $value"
+      echo "[FORMAT] $key: 期望 1-65535 端口号，实际值: ${value:0:3}***"
     fi
   fi
 
   # 布尔值验证（使用 =~ 交替语法代替 || 避免 bash 兼容性问题）
   if [[ "$key" =~ ^(IS_|ENABLE_|USE_|HAS_) ]] || [[ "$key" =~ _(ENABLED|DISABLED)$ ]]; then
-    [[ ! "$value" =~ ^(true|false|0|1|yes|no)$ ]] && echo "[FORMAT] $key: 期望布尔值，实际值: $value"
+    [[ ! "$value" =~ ^(true|false|0|1|yes|no)$ ]] && echo "[FORMAT] $key: 期望布尔值，实际值: ${value:0:3}***"
   fi
 
   # 占位符检测
   if [[ "$key" =~ _(KEY|SECRET|TOKEN|PASSWORD)$ ]]; then
     if [[ "$value" =~ ^(xxx|your-|changeme|TODO|REPLACE_ME|placeholder|example|test123) ]]; then
-      echo "[PLACEHOLDER] $key: 疑似占位符未替换: $value"
+      echo "[PLACEHOLDER] $key: 疑似占位符未替换: ${value:0:3}***"
     fi
   fi
 done < .env
@@ -323,7 +359,7 @@ if [ ! -f ".env.example" ]; then
       *_HOST)     echo "$var=localhost" ;;
       *_URL|*_URI) echo "$var=https://example.com" ;;
       *_ENABLED|*_DISABLED|IS_*|ENABLE_*|USE_*) echo "$var=false" ;;
-      *_KEY|*_SECRET|*_TOKEN|*_PASSWORD) echo "$var=your-${var,,}-here" ;;
+      *_KEY|*_SECRET|*_TOKEN|*_PASSWORD) echo "$var=your-$(echo "$var" | tr '[:upper:]' '[:lower:]')-here" ;;
       *_ENV|NODE_ENV) echo "$var=development" ;;
       *_TIMEOUT|*_TTL) echo "$var=30000" ;;
       *_LIMIT) echo "$var=100" ;;
